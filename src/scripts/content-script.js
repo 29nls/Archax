@@ -80,6 +80,26 @@ window.onload = () => {
     determineStartPosition();
 };
 
+function storeAutoplayFailure(move, reason) {
+    const rec = { ts: Date.now(), url: location.href, move: move, reason: reason };
+    try {
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.get(['mephisto_autoplay_failures'], (res) => {
+                const arr = (res && res.mephisto_autoplay_failures) ? res.mephisto_autoplay_failures : [];
+                arr.push(rec);
+                try { chrome.storage.local.set({ mephisto_autoplay_failures: arr }); } catch (e) { }
+            });
+        } else if (window && window.localStorage) {
+            const key = 'mephisto_autoplay_failures';
+            const arr = JSON.parse(localStorage.getItem(key) || '[]');
+            arr.push(rec);
+            localStorage.setItem(key, JSON.stringify(arr));
+        }
+    } catch (e) {
+        console.warn('storeAutoplayFailure failed', e);
+    }
+}
+
 // Helper: ensure the board and pieces are present before attempting autoplay
 function ensurePositionReady(timeout = 5000) {
     return new Promise((resolve) => {
@@ -855,9 +875,25 @@ function getBrowserOffsetXY() {
 }
 
 function getRandomSampledXY(bounds, range = 0.8) {
-    const margin = (1 - range) / 2;
-    const x = bounds.x + (range * Math.random() + margin) * bounds.width;
-    const y = bounds.y + (range * Math.random() + margin) * bounds.height;
+    // Prefer clicking near the center of the bounds with a small gaussian
+    // jitter to reduce miss-clicks. `range` controls the maximal fraction
+    // of the square size used for jitter (smaller -> closer to center).
+    function gaussianRandom() {
+        // Box-Muller transform
+        let u = 0, v = 0;
+        while (u === 0) u = Math.random();
+        while (v === 0) v = Math.random();
+        return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    }
+
+    const cx = bounds.x + bounds.width / 2;
+    const cy = bounds.y + bounds.height / 2;
+    const stdX = bounds.width * (range / 4); // tighter stddev
+    const stdY = bounds.height * (range / 4);
+    const jitterX = gaussianRandom() * stdX;
+    const jitterY = gaussianRandom() * stdY;
+    const x = cx + jitterX;
+    const y = cy + jitterY;
     const [correctX, correctY] = getOffsetCorrectionXY();
     return [x + correctX, y + correctY];
 }
@@ -876,6 +912,28 @@ function dispatchSimulateClick(x, y) {
 function simulateClickSquare(bounds, range = 0.8) {
     const [x, y] = getRandomSampledXY(bounds, range);
     dispatchSimulateClick(x, y);
+}
+
+// Derive last move coordinates as a LAN-like string (e.g. e2e4).
+function deriveLastMove() {
+    try {
+        function deriveCoords(square) {
+            if (!square) return 'no';
+            const boardBounds = getBoard().getBoundingClientRect();
+            const squareBounds = square.getBoundingClientRect();
+            const squareSide = squareBounds.width || (boardBounds.width / 8);
+            const xIdx = Math.floor(((squareBounds.x + 1) - boardBounds.x) / squareSide);
+            const yIdx = Math.floor(((squareBounds.y + 1) - boardBounds.y) / squareSide);
+            return getOrientation() === 'white'
+                ? String.fromCharCode('a'.charCodeAt(0) + xIdx) + (8 - yIdx)
+                : String.fromCharCode('h'.charCodeAt(0) - xIdx) + (yIdx + 1);
+        }
+
+        const [fromSquare, toSquare] = getLastMoveHighlights();
+        return deriveCoords(fromSquare) + deriveCoords(toSquare);
+    } catch (e) {
+        return null;
+    }
 }
 
 function simulateMove(move) {
@@ -899,21 +957,55 @@ function simulateMove(move) {
     }
 
     async function performSimulatedMoveClicks() {
-        simulateClickSquare(getBoundsFromCoords(move.substring(0, 2)));
+        // Use a tighter sampling range to click near square center and reduce misses
+        const fromBounds = getBoundsFromCoords(move.substring(0, 2));
+        const toBounds = getBoundsFromCoords(move.substring(2));
+        simulateClickSquare(fromBounds, 0.3);
         await promiseTimeout(getMoveTime());
-        simulateClickSquare(getBoundsFromCoords(move.substring(2)));
+        simulateClickSquare(toBounds, 0.3);
     }
 
-    async function performSimulatedMoveSequence() {
-        await promiseTimeout(getThinkTime());
-        await performSimulatedMoveClicks();
-        if (move[4]) {
-            await promiseTimeout(getMoveTime());
-            await simulatePromotionClicks(move[4]); // conditional promotion click
+    async function confirmClick(expectedMove, prevLastMove, timeout = 1200) {
+        // Wait up to `timeout` ms for the last-move highlight to change to expectedMove
+        const start = Date.now();
+        while ((Date.now() - start) < timeout) {
+            await promiseTimeout(Math.max(80, config.fen_refresh));
+            try {
+                const observed = deriveLastMove();
+                if (observed && observed !== prevLastMove) {
+                    return observed === expectedMove;
+                }
+            } catch (e) {
+                // ignore and retry
+            }
         }
+        return false;
     }
 
-    return performSimulatedMoveSequence();
+    async function performSimulatedMoveSequenceWithRetry() {
+        const maxAttempts = 2;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const prevLast = deriveLastMove();
+            await promiseTimeout(getThinkTime());
+            await performSimulatedMoveClicks();
+            if (move[4]) {
+                await promiseTimeout(getMoveTime());
+                await simulatePromotionClicks(move[4]); // conditional promotion click
+            }
+
+            const ok = await confirmClick(move, prevLast);
+            if (ok) return true;
+
+            // small pause before retrying
+            await promiseTimeout(120 + Math.random() * 150);
+        }
+        // persist failure for diagnostics
+        try { storeAutoplayFailure(move, 'retries_exhausted'); } catch (e) { /* ignore */ }
+        console.warn('Autoplay move failed after retries', move);
+        return false;
+    }
+
+    return performSimulatedMoveSequenceWithRetry();
 }
 
 function simulatePvMoves(pv) {
