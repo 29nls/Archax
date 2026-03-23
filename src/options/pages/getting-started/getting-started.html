@@ -1,0 +1,89 @@
+<div class="row">
+    <div class="col s12 m8 offset-m1 xl7 offset-xl1">
+        <div class="section">
+            <p>
+                Mephisto is a browser extension that enables next best move calculation and automated gameplay on
+                Chess.com and Lichess. Getting started is easy!
+            </p>
+        </div>
+        <div id="usage" class="section scrollspy">
+            <h3 class="header">Usage</h3>
+            <p>
+                Clicking Mephisto's icon will open its popup window and automatically scrape the current page for a
+                chess position to analyze.
+            </p>
+            <h5>Pinning Mephisto</h5>
+            <p>
+                For ease of use, pin Mephisto in chrome's extensions menu. Click the <i>puzzle</i> icon to the right of
+                Chrome's address bar. Find "Mephisto Chess Extension" and click the <i>pin</i> icon to the right of it.
+            </p>
+            <h5>Keeping Mephisto Open</h5>
+            <p>
+                You may notice that when you click outside of Mephisto's popup window, the popup will lose focus and
+                close. To prevent this, right click the pinned icon and click 'Inspect Popup'.
+            </p>
+            <p>
+                <i>NOTE</i>: This will keep the popup open until either the inspect window is closed or the current
+                tab is changed/closed.
+            </p>
+            <h5>Further Analysis</h5>
+            <p>
+                In Mephisto's popup window, you can click the button in the bottom-left corner to open the current
+                position in Lichess's analysis board for in-depth analysis. This page will be opened in a new tab.
+            </p>
+        </div>
+        <div id="configuration" class="section big-section scrollspy">
+            <h3 class="header">Configuration</h3>
+            <p>
+                Mephisto supports several modes of operation that can be configured under "Settings/General".
+            </p>
+            <h5>Best Move</h5>
+            <p>
+                This is the default mode. Mephisto presents the best move, the opponent's best response to the best
+                move, and the Stockfish evaluation for the position. The best move is displayed as a blue arrow
+                whereas the opponent's best response is displayed as a red arrow.
+            </p>
+            <h5>Hand & Brain</h5>
+            <p>
+                Mephisto presents the Stockfish evaluation for the position and acts as the "Brain", telling you the
+                type of the piece to move. From there, it is your job as the "Hand" to find and play the best move
+                given the hint.
+            </p>
+            <h5>Autoplay</h5>
+            <p>
+                Mephisto calculates the next best move and simulates clicks to play it over the board. By default,
+                the simulated clicks are generated directly in browser.
+            </p>
+            <b>Python Backend</b>
+            <p>
+                Click and drag events are performed outside the browser from a Python backend. Simulated mouse actions
+                are generated using
+                <a href="https://pyautogui.readthedocs.io/en/latest/">PyAutoGUI</a>.
+                For this mode to work, users must run
+                <a href="https://github.com/AlexPetrusca/Mephisto/blob/master/src/scripts/mephisto-clicker.py">mephisto-clicker.py</a>
+                locally.
+            </p>
+            <p>
+                <i>NOTE</i>: This script will take control of the mouse when activated by Mephisto.
+            </p>
+            <b>Puzzle Mode</b>
+            <p>
+                Mephisto optimizes for efficiently solving and automating puzzles. This should be enabled when
+                autoplaying puzzle minigames, like Chess.com's Puzzle Rush and Lichess's Puzzle Storm, where a
+                player's score depends on solving as many puzzles as possible in a fixed timeframe.
+            </p>
+        </div>
+    </div>
+    <div class="col hide-on-small-only m3 xl3 offset-xl1 sticky-top">
+        <div class="toc-wrapper pin-top">
+            <ul id="toc" class="section table-of-contents">
+                <li>
+                    <a href="#usage">Usage</a>
+                </li>
+                <li>
+                    <a href="#configuration">Configuration</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>

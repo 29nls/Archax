@@ -1,0 +1,83 @@
+<div class="row">
+    <div class="col s12 m8 offset-m1 xl7 offset-xl1">
+        <div class="section">
+            <h4 class="header">Error Logs</h4>
+            <p>View recorded extension errors, filter by level/time, and clear stored logs.</p>
+
+            <div class="row">
+                <div class="col s12 m4">
+                    <label>Search</label>
+                    <input id="filter-search" type="search" placeholder="Search message, context, stack..." />
+                </div>
+                <div class="col s12 m4">
+                    <label>Level</label>
+                    <select id="filter-level">
+                        <option value="all">All</option>
+                        <option value="error">Error</option>
+                        <option value="unhandledrejection">Unhandled Rejection</option>
+                    </select>
+                </div>
+                <div class="col s12 m4">
+                    <label>From</label>
+                    <input id="filter-from" type="datetime-local" />
+                </div>
+                <div class="col s12 m4">
+                    <label>To</label>
+                    <input id="filter-to" type="datetime-local" />
+                </div>
+            </div>
+
+            <div class="row" style="margin-top:8px;">
+                <div class="col s12 m3">
+                    <label>Page Size</label>
+                    <select id="page-size">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="col s12 m3">
+                    <label>Auto Refresh</label>
+                    <p>
+                        <label>
+                            <input type="checkbox" id="auto-refresh" />
+                            <span>Enable</span>
+                        </label>
+                    </p>
+                </div>
+                <div class="col s12 m3">
+                    <label>Interval (s)</label>
+                    <input id="auto-interval" type="number" min="5" value="10" />
+                </div>
+                <div class="col s12 m3" style="display:flex;gap:8px;align-items:flex-end;">
+                    <a id="refresh-logs" class="waves-effect waves-light btn">Refresh</a>
+                    <a id="clear-logs" class="waves-effect waves-light red btn">Clear Logs</a>
+                    <a id="download-logs" class="waves-effect waves-light btn grey">Download</a>
+                </div>
+            </div>
+
+            <div class="section">
+                <table id="logs-table" class="striped responsive-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Context</th>
+                            <th>Level</th>
+                            <th>Message</th>
+                            <th>Stack</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+
+                <div id="pagination" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                    <button id="prev-page" class="btn">Prev</button>
+                    <span id="page-info">Page 1</span>
+                    <button id="next-page" class="btn">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

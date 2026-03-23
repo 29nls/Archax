@@ -1,0 +1,32 @@
+.section pre#logs-output {
+    font-family: monospace;
+    font-size: 12px;
+}
+
+#logs-table td, #logs-table th {
+    vertical-align: middle;
+    word-break: break-word;
+}
+
+#logs-table td a {
+    cursor: pointer;
+    color: #039be5;
+}
+
+#pagination {
+    margin-top: 8px;
+}
+
+.expand-row pre {
+    background: #111;
+    color: #eee;
+    padding: 12px;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}
+
+.expand-row td {
+    background: #222;
+}
