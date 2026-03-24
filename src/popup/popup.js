@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // listen to messages from content-script
     chrome.runtime.onMessage.addListener(function (response) {
-        if (response.fenresponse && response.dom !== 'no') {
+        if (response.fenresponse && response.dom != null && response.dom !== 'no') {
             if (board.orientation() !== response.orient) {
                 board.orientation(response.orient);
             }
@@ -233,8 +233,8 @@ function request_automove(move) {
             const tabs = await safeQueryTabs({active: true, currentWindow: true});
             if (!tabs || !tabs[0]) return;
             const tabId = tabs[0].id;
-            const maxAttempts = 5;
-            const baseDelayMs = 300; // base for exponential backoff
+            const maxAttempts = 8;
+            const baseDelayMs = 200; // base for exponential backoff
             let success = false;
             incrMetric('automoveAttempts');
 
@@ -280,6 +280,19 @@ function request_automove(move) {
             if (!success) {
                 console.warn('request_automove: all attempts failed');
                 incrMetric('automoveFailures');
+                // Inform the user that automove failed and suggest checking content-script / backend
+                try {
+                    if (chrome.notifications && chrome.notifications.create) {
+                        chrome.notifications.create({
+                            type: 'basic',
+                            iconUrl: '/res/icons/icon48.png',
+                            title: 'Mephisto: Autoplay failed',
+                            message: 'Autoplay failed after multiple attempts. Ensure the extension content script is active or the Python backend is running.'
+                        });
+                    }
+                } catch (e) {
+                    console.debug('notification create failed', e);
+                }
             }
         } catch (err) {
             console.debug('request_automove: tab query failed', err.message || err);
@@ -642,6 +655,10 @@ function on_new_pos(fen, startFen, moves) {
 }
 
 function parse_position_from_response(txt) {
+    if (!txt || typeof txt !== 'string') {
+        console.warn('parse_position_from_response: invalid txt', txt);
+        return {fen: '', startFen: '', moves: ''};
+    }
     const prefixMap = {
         li: 'Game detected on Lichess.org',
         cc: 'Game detected on Chess.com',
