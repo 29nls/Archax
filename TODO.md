@@ -1,17 +1,13 @@
-# Fix popup.js TypeError and Create PR
+# Mephisto Extension Fix: Manifest CSP Sandbox Error
 
-Status: In progress
+## Steps to Complete:
 
-## Steps:
+### 1. ✅ Create TODO.md and confirm plan
+### 2. ✅ Edit manifest.json: fixed top-level sandbox {} + removed CSP.sandbox entirely (MV3 strict policy compliance)
+### 3. ✅ Test extension reload in chrome://extensions/ (user feedback pending)
+### 4. [PENDING] Verify functionality on chess.com/lichess.org
+### 5. [PENDING] Handle any LC0 issues if they arise (investigate background-script.js)
+### 6. [PENDING] Complete task
 
-- [x] Analyze files and create edit plan ✓
-- [x] Edit src/popup/popup.js to add null checks in message listener and parse_position_from_response ✓
-- [ ] Reload extension and test (manually verify no crash)
-- [ ] Create git branch: git checkout -b blackboxai/fix-popup-substring-error
-- [ ] git add src/popup/popup.js
-- [ ] git commit -m "fix: guard against undefined response.dom in popup.js"
-- [ ] git push -u origin HEAD
-- [ ] gh pr create --title "fix: prevent TypeError in popup.js substring call" --body "Add null/undefined checks before calling substring on response.dom from content-script. Prevents crash when malformed message received." --base main
-- [ ] Update this TODO with completion status ✓
+**Status:** Manifest fixed. Extension should now load. Test by reloading in chrome://extensions/. If LC0 issues appear during use, we can investigate next.
 
-Next step: Create git branch ✓

@@ -47,13 +47,24 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     };
 
     window.onunhandledrejection = function (event) {
-        const reason = event && event.reason;
+        const reason = event?.reason;
+        let message = '[unknown]';
+        let stack = null;
+        if (reason) {
+            if (reason.message) message = reason.message;
+            else if (typeof reason.toString === 'function') message = reason.toString();
+            else if (typeof reason === 'object') message = JSON.stringify(reason, null, 2).slice(0, 1000);
+            else message = String(reason);
+            if (reason.stack) stack = reason.stack;
+            else if (typeof reason === 'object') stack = Object.getOwnPropertyNames(reason).join(', ');
+        }
         const rec = {
             ts: Date.now(),
             context: 'content-script',
             type: 'unhandledrejection',
-            message: (reason && reason.message) ? reason.message : String(reason),
-            stack: (reason && reason.stack) ? reason.stack : null
+            message,
+            stack,
+            reason_type: typeof reason
         };
         console.error('[Mephisto][content-script][unhandledrejection]', rec);
         storeRecord(rec);
@@ -80,8 +91,8 @@ window.onload = () => {
     determineStartPosition();
 };
 
-function storeAutoplayFailure(move, reason) {
-    const rec = { ts: Date.now(), url: location.href, move: move, reason: reason };
+function storeAutoplayFailure(move, reason, meta) {
+    const rec = { ts: Date.now(), url: location.href, move: move, reason: reason, meta: meta || {} };
     try {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.get(['mephisto_autoplay_failures'], (res) => {
@@ -502,22 +513,56 @@ function getMoveContainer() {
     return moveContainer;
 }
 
+function getBoardShadowRoot() {
+    if (site !== 'chesscom') return null;
+    const wc = document.querySelector('wc-chess-board') || document.querySelector('wc-chessboard') || document.querySelector('wc-board');
+    return wc && wc.shadowRoot ? wc.shadowRoot : null;
+}
+
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
     if (site === 'chesscom') {
         const board = getBoard();
-        let highlights = Array.from(document.querySelectorAll('.highlight'));
+        const shadowRoot = getBoardShadowRoot();
+        
+        // Search both shadow DOM and document
+        let highlights = [];
+        if (shadowRoot) {
+            const shadowHighlights = Array.from(shadowRoot.querySelectorAll('.highlight, .move-highlight, .last-move'));
+            highlights.push(...shadowHighlights);
+        }
+        const docHighlights = Array.from(document.querySelectorAll('.highlight, .move-highlight, .last-move'));
+        highlights.push(...docHighlights);
+        
+        // Remove duplicates by element identity
+        highlights = highlights.filter((h, i) => highlights.findIndex(h2 => h2 === h) === i);
+        
         if (highlights.length === 3) {
             // If there are 3 highlights, we need to figure out which of them is a user action.
             // Either a piece is being dragged or a piece was clicked and let go.
-            const dragPiece = board.querySelector('.piece.dragging');
+            // Check drag/hover in both shadow and document
+            let dragPiece = board.querySelector('.piece.dragging');
+            if (!dragPiece && shadowRoot) {
+                dragPiece = shadowRoot.querySelector('.piece.dragging');
+            }
             if (dragPiece) {
-                const dragSquareId = dragPiece.className.match('square-[0-9][0-9]')[0];
-                highlights = highlights.filter(ht => !ht.classList.contains(dragSquareId));
+                const dragSquareId = dragPiece.className.match(/square-([0-9][0-9])/);
+                if (dragSquareId) {
+                    const squareId = `square-${dragSquareId[1]}`;
+                    highlights = highlights.filter(ht => !ht.classList.contains(squareId));
+                }
             } else {
-                const hoverSquare = board.querySelector('.hover-square');
-                const hoverSquareId = hoverSquare.className.match('square-[0-9][0-9]')[0];
-                highlights = highlights.filter(ht => !ht.classList.contains(hoverSquareId));
+                let hoverSquare = board.querySelector('.hover-square');
+                if (!hoverSquare && shadowRoot) {
+                    hoverSquare = shadowRoot.querySelector('.hover-square');
+                }
+                if (hoverSquare) {
+                    const hoverSquareId = hoverSquare.className.match(/square-([0-9][0-9])/);
+                    if (hoverSquareId) {
+                        const squareId = `square-${hoverSquareId[1]}`;
+                        highlights = highlights.filter(ht => !ht.classList.contains(squareId));
+                    }
+                }
             }
         }
         [fromSquare, toSquare] = [highlights[0], highlights[1]];
@@ -917,9 +962,9 @@ function simulateClickSquare(bounds, range = 0.8) {
 // Derive last move coordinates as a LAN-like string (e.g. e2e4).
 function deriveLastMove() {
     try {
+        const boardBounds = getBoard().getBoundingClientRect();
         function deriveCoords(square) {
             if (!square) return 'no';
-            const boardBounds = getBoard().getBoundingClientRect();
             const squareBounds = square.getBoundingClientRect();
             const squareSide = squareBounds.width || (boardBounds.width / 8);
             const xIdx = Math.floor(((squareBounds.x + 1) - boardBounds.x) / squareSide);
@@ -932,6 +977,25 @@ function deriveLastMove() {
         const [fromSquare, toSquare] = getLastMoveHighlights();
         return deriveCoords(fromSquare) + deriveCoords(toSquare);
     } catch (e) {
+        console.debug('deriveLastMove highlights failed:', e);
+        // Fallback confirmation via position scrape from move list
+        try {
+            const moveContainer = getMoveContainer();
+            if (moveContainer) {
+                const fenStr = scrapePositionFen();
+                const parts = fenStr.split('*****').filter(p => p.trim());
+                if (parts.length > 0) {
+                    const lastMove = parts[parts.length - 1];
+                    // Heuristic: exact 4-char LAN pattern
+                    if (lastMove && lastMove.length === 4 && /^[a-h][1-8][a-h][1-8]$/.test(lastMove)) {
+                        console.debug('deriveLastMove fallback LAN from scrape:', lastMove);
+                        return lastMove;
+                    }
+                }
+            }
+        } catch (f) {
+            console.debug('deriveLastMove scrape fallback failed:', f);
+        }
         return null;
     }
 }
@@ -965,26 +1029,34 @@ function simulateMove(move) {
         simulateClickSquare(toBounds, 0.3);
     }
 
-    async function confirmClick(expectedMove, prevLastMove, timeout = 1200) {
-        // Wait up to `timeout` ms for the last-move highlight to change to expectedMove
-        const start = Date.now();
-        while ((Date.now() - start) < timeout) {
-            await promiseTimeout(Math.max(80, config.fen_refresh));
-            try {
-                const observed = deriveLastMove();
-                if (observed && observed !== prevLastMove) {
-                    return observed === expectedMove;
-                }
-            } catch (e) {
-                // ignore and retry
+async function confirmClick(expectedMove, prevLastMove, timeout = (config && config.click_confirm_timeout) ? config.click_confirm_timeout : 3000) {
+    const start = Date.now();
+    const preFen = getMoveContainer() ? scrapePositionFen() : null; // baseline FEN/moves
+    while ((Date.now() - start) < timeout) {
+        await promiseTimeout(Math.max(100, config?.fen_refresh || 250));
+        try {
+            const observed = deriveLastMove();
+            if (observed && observed !== prevLastMove) {
+                return observed === expectedMove;
             }
+            // Fallback: check if position changed (new move appended)
+            if (preFen && getMoveContainer()) {
+                const postFen = scrapePositionFen();
+                if (postFen && postFen !== preFen && postFen.includes(expectedMove.replace(/[^a-h1-8x=]/g, ''))) {
+                    return true;
+                }
+            }
+        } catch (e) {
+            // ignore and retry
         }
-        return false;
     }
+    return false;
+}
 
     async function performSimulatedMoveSequenceWithRetry() {
-        const maxAttempts = 2;
+        const maxAttempts = 5;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            console.debug(`Move attempt ${attempt + 1}/${maxAttempts} for ${move}`);
             const prevLast = deriveLastMove();
             await promiseTimeout(getThinkTime());
             await performSimulatedMoveClicks();
@@ -993,14 +1065,35 @@ function simulateMove(move) {
                 await simulatePromotionClicks(move[4]); // conditional promotion click
             }
 
-            const ok = await confirmClick(move, prevLast);
+            const ok = await confirmClick(move, prevLast, 3000);
             if (ok) return true;
 
             // small pause before retrying
             await promiseTimeout(120 + Math.random() * 150);
         }
-        // persist failure for diagnostics
-        try { storeAutoplayFailure(move, 'retries_exhausted'); } catch (e) { /* ignore */ }
+        // Enhanced diagnostics
+        try {
+            const prevLastSafe = prevLast || 'undefined';
+            const shadowRoot = getBoardShadowRoot();
+            const highlights = Array.from((shadowRoot || document).querySelectorAll('.highlight'));
+            const preFen = getMoveContainer() ? scrapePositionFen() : 'no-moves';
+            const ctx = {
+                prevLast: prevLastSafe,
+                attempts: maxAttempts,
+                shadowRoot: !!shadowRoot,
+                highlightsFound: highlights.length,
+                preFen: preFen,
+                boardSelectors: {
+                    board: !!getBoard(),
+                    pieces: getPieces()?.length || 0,
+                    wcBoard: !!document.querySelector('wc-chess-board')
+                },
+                boardBounds: boardBounds ? { x: boardBounds.x, y: boardBounds.y, width: boardBounds.width, height: boardBounds.height } : null
+            };
+            storeAutoplayFailure(move, 'retries_exhausted', ctx);
+        } catch (e) { 
+            console.warn('Enhanced failure logging failed:', e); 
+        }
         console.warn('Autoplay move failed after retries', move);
         return false;
     }

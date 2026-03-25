@@ -22,29 +22,17 @@
     "default_popup": "src/popup/popup.html",
     "options_page": "src/options/options.html"
   },
-  "permissions": [
-    "debugger",
-    "scripting"
-  ],
+  "permissions": ["debugger", "scripting"],
   "background": {
     "service_worker": "src/scripts/background-script.js"
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://www.chess.com/*",
-        "*://lichess.org/*",
-        "*://blitztactics.com/*"
-      ],
-      "js": [
-        "lib/lru.min.js",
-        "src/scripts/content-script.js"
-      ]
+      "matches": ["*://www.chess.com/*", "*://lichess.org/*", "*://blitztactics.com/*"],
+      "js": ["lib/lru.min.js", "src/scripts/content-script.js"]
     }
   ],
-  "sandbox": {
-    "pages": ["lib/engine/lc0/lc0.html"]
-  },
+  "sandbox": {},
   "options_ui": {
     "page": "src/options/options.html",
     "open_in_tab": true
@@ -52,9 +40,6 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
-  "host_permissions": [
-    "http://localhost:8080/*",
-    "http://localhost:9090/*"
-  ],
+  "host_permissions": ["http://localhost:8080/*", "http://localhost:9090/*"],
   "default_locale": "en"
 }
